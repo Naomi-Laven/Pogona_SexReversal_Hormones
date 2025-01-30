@@ -1,0 +1,393 @@
+---
+title: "Modelling Hormones over Reproductive Time"
+format: html
+---
+
+##### Libraries and Functions 
+
+```{r, Package Install}
+pacman::p_load(ggplot2, car, dplyr, tidyr, brms, lubridate, patchwork)
+```
+
+```{r, Functions}
+#' @title pMCMC Function
+#' @param x The vector for the posterior distribution. Note that this will test the null hypothesis that the parameter of interest is significantly different from 0.
+#' @param null A numeric value decsribing what the null hypothesis should be
+#' @param twotail Whether to conduct a one-tailed hypothesis or a two-tailed hypotheses. Default = true indicating a two-tailed test will be done.
+pmcmc <- function(x, null = 0, twotail = TRUE){
+  if(twotail){
+    2*(1 - max(table(x<=null) / length(x)))
+  } else{
+    (1 - max(table(x<=null) / length(x)))
+  }
+}
+
+# Function for p-value rendering nicely
+#' @title p_value
+#' @description Checks p-value and assigned to catagories unless non-significant then gives actual p
+#' @param x the value to check against
+#' 
+p_value <- function(x){
+  if(x <= 0.0001) {tmp = "< 0.0001"}
+  if(x <= 0.001 & x >= 0.0001) {tmp ="< 0.001"}
+  if(x <= 0.01 & x >= 0.001) {tmp ="< 0.01"}
+  if(x >= 0.01) {tmp = round(x, digits =2)}
+  return(tmp)
+}
+
+post_summary <- function(x, name = "ZWF_xxx - ZZM_xxx"){
+  data.frame(Name = name, Est. = mean(x), `L 95% CI` = quantile(x, probs = c(0.025, 0.975))[1], `U 95% CI` = quantile(x, probs = c(0.025, 0.975))[2], p = p_value(pmcmc(x)), check.names = FALSE, row.names = NULL)
+}
+```
+
+
+
+#### Model 2: predicting log hormone concentration based on female genotype and time from most recent clutch
+
+##### Call in data
+```{r}
+#Dataset with female hormone data in long format with an integer for each sample that indicates reproductive condition
+
+reprofem1<-read.csv("Datafiles/Reproductivefemale_model1_data.csv")
+
+```
+
+```{r}
+ggplot(reprofem1, aes(x = logTestosterone, y = logEstrogen, color = Gen_Sex)) + geom_point() + geom_smooth(method = "lm")
+
+summary(lm(reprofem1$logTestosterone~reprofem1$logEstrogen + reprofem1$Gen_Sex))
+```
+
+#### Visualising individual changes in T over time
+
+```{r}
+ggplot(reprofem1, aes( y = logTestosterone, x = sample_to_last_clutch, color = Gen_Sex)) + theme_classic() + annotate(geom = "rect", xmin = -39, xmax = 0, ymin = -Inf, ymax = Inf, alpha = 0.1, fill = "green") + geom_line(aes(group = DragonID), color = "grey") + geom_point(size = 6) + scale_color_manual(values = c("plum3", "darkolivegreen")) + xlab("Days since most recent clutch") + ylab("Log Testosterone Concentration (pg/ml)") + ylim(2, 9.75) + xlim(-100, 300) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm"), text = element_text(size = 30))
+
+ggsave(filename = "changesinTbygen_sex.png", path = "Pogona Hormones/output", width = 20, height = 15)
+
+
+```
+
+#### Visualising individual changes in E2 over time
+
+```{r}
+ggplot(reprofem1, aes( y = logEstrogen, x = sample_to_last_clutch, color = Gen_Sex)) + theme_classic() + annotate(geom = "rect", xmin = -39, xmax = 0, ymin = -Inf, ymax = Inf, alpha = 0.1, fill = "green") + geom_line(aes(group = DragonID), color = "grey") + geom_point(size = 6) + scale_color_manual(values = c("plum3", "darkolivegreen")) + xlab("Days since most recent clutch") + ylab("Log Estradiol Concentration (pg/ml)") + ylim(4.5, 6.5) + xlim(-100, 300) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm"), text = element_text(size = 30))
+
+ggsave(filename = "changesinEbygen_sex.png", path = "Pogona Hormones/output", width = 20, height = 15)
+
+
+```
+
+#### Model Parameters and Running 
+
+```{r}
+
+#Linear model on log-transformed data, predicting hormone values based on female genotype and time to most recent clutch, accounting for female ID and plate n. 
+
+test  <- bf(logTestosterone | mi() ~ Gen_Sex + sample_to_last_clutch + (1|q|DragonID) + (1|Testosterone_plate))
+estro <- bf(logEstrogen     | mi() ~ Gen_Sex + sample_to_last_clutch + (1|q|DragonID) + (1|Estrogen_plate))
+
+# Fit two models 
+  model <- brm(
+    test + estro + set_rescor(TRUE),
+    data = reprofem1,
+    family = gaussian(),
+    chains = 4,
+    cores = 4,
+    iter = 5000,
+    warmup = 1000,
+    control = list(adapt_delta = 0.99, max_treedepth = 15)
+  )
+
+```
+
+#### Save Model
+
+```{r}
+rerun=FALSE
+if(rerun){
+  saveRDS(model, "Pogona Hormones/output/models/reproductive_model_1.rds")
+} else{
+  model2wai <- readRDS("Pogona Hormones/output/models/reproductive_model_1.rds")
+}
+
+```
+
+#### Model Check
+
+```{r}
+model2 <- readRDS("Pogona Hormones/output/models/reproductive_model_1.rds")
+```
+
+```{r}
+
+# Have a look at the model. 
+  summary(model2)
+  plot(model2)
+```
+
+#### Model Predictions
+
+```{r}
+bayes_R2(model)
+
+newdata <- data.frame(Gen_Sex = rep(c("ZZF", "ZWF"), each = 3), sample_to_last_clutch = c(-20, 40, 190))
+
+# Summary
+predictions1T <- cbind(newdata, fitted(model, newdata=newdata, re_formula = NA, resp="logTestosterone"))
+
+predictions1E <- cbind(newdata, fitted(model, newdata=newdata, re_formula = NA, resp="logEstrogen"))
+ 
+# posterior predictions
+post_predictions1T <- fitted(model, newdata=newdata, re_formula = NA, resp="logTestosterone", summary = FALSE)
+ colnames(post_predictions1T) <- with(newdata, paste0(Gen_Sex, "_", sample_to_last_clutch))
+
+ post_predictions1E <- fitted(model, newdata=newdata, re_formula = NA, resp="logEstrogen", summary = FALSE)
+ colnames(post_predictions1E) <- with(newdata, paste0(Gen_Sex, "_", sample_to_last_clutch))
+
+# Difference
+post_diff<- post_predictions1T[,1] - post_predictions1T[,2]
+mean(post_diff)
+quantile(post_diff, probs = c(0.025, 0.975))
+pmcmc(post_diff)
+
+```
+
+```{r}
+#Tabling Comparisons between groups at the different timepoints 
+#TESTOSTERONE
+
+Ttab_repro  <- post_summary(post_predictions1T[,"ZWF_-20"] - post_predictions1T[,"ZZF_-20"], name = "Comparison at -20 days to most recent clutch")
+
+Ttab_repro  <- rbind(Ttab_repro, post_summary(post_predictions1T[,"ZWF_40"] - post_predictions1T[,"ZZF_40"], name = "Comparison at 40 days to most recent clutch"))
+
+Ttab_repro <- rbind(Ttab_repro, post_summary(post_predictions1T[,"ZWF_190"] - post_predictions1T[,"ZZF_190"], name = "Comparison at 190 days to most recent clutch"))
+
+write.csv(Ttab_repro, file="Pogona Hormones/output/Ttab_repro.csv", row.names = FALSE)
+
+
+```
+
+```{r}
+#Estrogen
+
+Etab_repro  <- post_summary(post_predictions1E[,"ZWF_-20"] - post_predictions1E[,"ZZF_-20"], name = "Comparison at -20 days to most recent clutch")
+
+Etab_repro  <- rbind(Etab_repro, post_summary(post_predictions1E[,"ZWF_40"] - post_predictions1E[,"ZZF_40"], name = "Comparison at 40 days to most recent clutch"))
+
+Etab_repro <- rbind(Etab_repro, post_summary(post_predictions1E[,"ZWF_190"] - post_predictions1E[,"ZZF_190"], name = "Comparison at 190 days to most recent clutch"))
+
+write.csv(Etab_repro, file="Pogona Hormones/output/Etab_repro.csv", row.names = FALSE)
+```
+
+
+```{r}
+#Testosterone over time quick check ZWF
+
+Ttab_reproZWF  <- post_summary(post_predictions1T[,"ZWF_-20"] - post_predictions1T[,"ZWF_40"], name = "ZWF -20 to 40")
+
+Ttab_reproZWF  <- rbind(Ttab_reproZWF, post_summary(post_predictions1T[,"ZWF_40"] - post_predictions1T[,"ZWF_190"], name = "ZWF 40 to 190"))
+
+Ttab_reproZWF <- rbind(Ttab_reproZWF, post_summary(post_predictions1T[,"ZWF_190"] - post_predictions1T[,"ZWF_-20"], name = "ZWF 190 to -20"))
+
+Ttab_reproZWF
+
+write.csv(Ttab_reproZWF, file="Pogona Hormones/output/Ttab_reproZWF.csv", row.names = FALSE)
+```
+
+```{r}
+#Testosterone over time quick check ZZF
+
+Ttab_reproZZF  <- post_summary(post_predictions1T[,"ZZF_-20"] - post_predictions1T[,"ZZF_40"], name = "ZZF -20 to 40")
+
+Ttab_reproZZF  <- rbind(Ttab_reproZZF, post_summary(post_predictions1T[,"ZZF_40"] - post_predictions1T[,"ZZF_190"], name = "ZZF 40 to 190"))
+
+Ttab_reproZZF <- rbind(Ttab_reproZZF, post_summary(post_predictions1T[,"ZZF_190"] - post_predictions1T[,"ZZF_-20"], name = "ZZF 190 to -20"))
+
+Ttab_reproZZF
+
+write.csv(Ttab_reproZZF, file="Pogona Hormones/output/Ttab_reproZZF.csv", row.names = FALSE)
+```
+
+```{r}
+#Estrogen over time quick check ZWF 
+
+Etab_reproZWF  <- post_summary(post_predictions1E[,"ZWF_-20"] - post_predictions1E[,"ZWF_40"], name = "ZWF -20 to 40")
+
+Etab_reproZWF  <- rbind(Etab_reproZWF, post_summary(post_predictions1E[,"ZWF_40"] - post_predictions1E[,"ZWF_190"], name = "ZWF 40 to 190"))
+
+Etab_reproZWF <- rbind(Etab_reproZWF, post_summary(post_predictions1E[,"ZWF_190"] - post_predictions1E[,"ZWF_-20"], name = "ZWF 190 to -20"))
+
+write.csv(Etab_reproZWF, file="Pogona Hormones/output/Etab_reproZWF.csv", row.names = FALSE)
+```
+
+```{r}
+#Estrogen over time quick check ZZF 
+
+Etab_reproZZF  <- post_summary(post_predictions1E[,"ZZF_-20"] - post_predictions1E[,"ZZF_40"], name = "ZZF -20 to 40")
+
+Etab_reproZZF  <- rbind(Etab_reproZZF, post_summary(post_predictions1E[,"ZZF_40"] - post_predictions1E[,"ZZF_190"], name = "ZZF 40 to 190"))
+
+Etab_reproZZF <- rbind(Etab_reproZZF, post_summary(post_predictions1E[,"ZZF_190"] - post_predictions1E[,"ZZF_-20"], name = "ZZF 190 to -20"))
+
+write.csv(Etab_reproZZF, file="Pogona Hormones/output/Etab_reproZZF.csv", row.names = FALSE)
+```
+
+##### Visualising Model predictions at appropriate timepoints
+
+
+
+```{r}
+
+#Plotting the estimates of testosterone over time for the two female types
+
+
+model1Tplot <- ggplot(predictions1T, aes(x = factor(sample_to_last_clutch), y = Estimate, color = Gen_Sex, group = Gen_Sex)) + scale_color_manual(values = c("plum3", "darkolivegreen")) + geom_point(size = 10, position = position_dodge(width = 0.5)) +  geom_errorbar(aes(ymin = Q2.5, ymax = Q97.5), position = position_dodge(width = 0.5), width = 0.5) + labs(x = "Days since most recent clutch", y = "Estimated mean log hormone concentration (pg/mL)") + theme_classic() + theme(axis.title = element_text(size = 25, face = "bold"), axis.text = element_text(size = 25)) + ylim(3.5, 7.5)
+
+
+model1Tplot
+
+
+ggsave(filename = "model1_predictionsT.png", path = "Pogona Hormones/output", width = 18, height = 20)
+
+```
+
+
+```{r}
+
+#Plotting the estimates of estradiol over time for the two female types
+
+
+model1Eplot <- ggplot(predictions1E, aes(x = factor(sample_to_last_clutch), y = Estimate, color = Gen_Sex, group = Gen_Sex)) + scale_color_manual(values = c("plum3", "darkolivegreen")) + geom_point(size = 10, position = position_dodge(width = 0.5)) +  geom_errorbar(aes(ymin = Q2.5, ymax = Q97.5), position = position_dodge(width = 0.5), width = 0.5) + labs(x = "Days since most recent clutch", y = "Estimated mean log hormone concentration (pg/mL)") + theme_classic() + theme(axis.title = element_text(size = 25, face = "bold"), axis.text = element_text(size = 25)) + ylim(3.5, 7.5)
+
+model1Eplot
+
+ggsave(filename = "model1_predictionsE.png", path = "Pogona Hormones/output", width = 18, height = 20)
+
+```
+
+
+```{r}
+
+jointplot <- model1Tplot + model1Eplot
+ggsave(filename = "model1_predictions.png", path = "Pogona Hormones/output", width = 20, height = 10)
+
+jointplot
+
+```
+
+
+```{r}
+Tchange_with_model <- ggplot() +
+
+  # Raw data layer
+  geom_rect(aes(xmin = -39, xmax = 0, ymin = -Inf, ymax = Inf), fill = "green", alpha = 0.1, inherit.aes = FALSE) +
+  geom_line(data = reprofem1, aes(x = sample_to_last_clutch, y = logTestosterone, group = DragonID), color = "grey", alpha = 0.5) +
+  geom_point(data = reprofem1, aes(x = sample_to_last_clutch, y = logTestosterone, color = Gen_Sex), size = 6, alpha = 0.6) +
+
+  # Add vertical error bars
+  geom_errorbar(data = predictions1T, 
+                aes(x = sample_to_last_clutch, ymin = Q2.5, ymax = Q97.5, group = Gen_Sex), 
+                position = position_dodge(width = 15), 
+                width = 0, size = 1, color = "black") +
+
+  # Link model predictions with lines
+  geom_line(data = predictions1T, 
+            aes(x = sample_to_last_clutch, y = Estimate, group = Gen_Sex, color = Gen_Sex), 
+            position = position_dodge(width = 15), size = 1.5) + 
+
+  # Model outputs layer with offset for genotypes (ZZ and ZW), including black border and fill color based on Gen_Sex
+  geom_point(data = predictions1T, aes(x = sample_to_last_clutch, y = Estimate, color = Gen_Sex, fill = Gen_Sex), 
+             size = 10, position = position_dodge(width = 15), 
+             shape = 21, stroke = 1, color = "black") +  
+  
+  # Aesthetics and theme
+  scale_color_manual(values = c("plum3", "darkolivegreen")) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +  
+  ylab("Log Testosterone Concentration (pg/ml)") +
+  xlab("Days Since Most Recent Clutch") +  
+  ylim(2, 9.75) + 
+
+  # Extend both sides to ensure visibility of -65 and 300
+  xlim(-100, 320) +  
+  scale_x_continuous(
+    breaks = c(-65, 0, 300, seq(-50, 250, by = 50))  
+  ) +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1),
+    axis.ticks = element_line(size = 1),
+    axis.ticks.length = unit(0.3, "cm"),
+    text = element_text(size = 30)
+  )
+
+
+ggsave(filename = "Tchange_with_model_offset_genotypes.png", path = "Pogona Hormones/output", width = 20, height = 15)
+
+Tchange_with_model
+```
+
+
+```{r}
+Echange_with_model <- ggplot() +
+
+  # Raw data layer
+  geom_rect(aes(xmin = -39, xmax = 0, ymin = -Inf, ymax = Inf), fill = "green", alpha = 0.1, inherit.aes = FALSE) +
+  geom_line(data = reprofem1, aes(x = sample_to_last_clutch, y = logEstrogen, group = DragonID), color = "grey", alpha = 0.5) +
+  geom_point(data = reprofem1, aes(x = sample_to_last_clutch, y = logEstrogen, color = Gen_Sex), size = 6, alpha = 0.6) +
+
+  # Add vertical error bars
+  geom_errorbar(data = predictions1E, 
+                aes(x = sample_to_last_clutch, ymin = Q2.5, ymax = Q97.5, group = Gen_Sex), 
+                position = position_dodge(width = 15), 
+                width = 0, size = 1, color = "black") +
+
+  # Link model predictions with lines
+  geom_line(data = predictions1E, 
+            aes(x = sample_to_last_clutch, y = Estimate, group = Gen_Sex, color = Gen_Sex), 
+            position = position_dodge(width = 10), size = 1.5) +  # Line thickness
+
+  # Model outputs layer with offset for genotypes (ZZ and ZW), including black border and fill color based on Gen_Sex
+  geom_point(data = predictions1E, aes(x = sample_to_last_clutch, y = Estimate, color = Gen_Sex, fill = Gen_Sex), 
+             size = 10, position = position_dodge(width = 15), 
+             shape = 21, stroke = 1, color = "black") +  # Shape 21 allows for border and fill, stroke = 2 controls border thickness
+  
+  # Aesthetics and theme
+  scale_color_manual(values = c("plum3", "darkolivegreen")) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +  # Set fill color to match the color scale
+  ylab("Log Estradiol Concentration (pg/ml)") +
+  xlab("Days Since Most Recent Clutch") +  # Label for X-axis
+  ylim(4.75, 6.5) +  # Set Y-axis limits
+
+  # Extend both sides to ensure visibility of -65 and 300
+  xlim(-100, 320) +  # Set X-axis limits from -100 to 320
+  scale_x_continuous(
+    breaks = c(-65, 0, 300, seq(-50, 250, by = 50))  # Explicitly set breaks for -65, 0, 300, and others
+  ) +
+  theme_classic() +
+  theme(
+    axis.line = element_line(size = 1),
+    axis.ticks = element_line(size = 1),
+    axis.ticks.length = unit(0.3, "cm"),
+    text = element_text(size = 30)
+  )
+
+# Save the plot
+ggsave(filename = "Echange_with_model_offset_genotypes.png", path = "Pogona Hormones/output", width = 20, height = 15)
+
+Echange_with_model
+```
+
+```{r}
+change_with_model <- Tchange_with_model / Echange_with_model
+ggsave(filename = "changesreprofem.pdf", path = "Pogona Hormones/output", width = 15, height = 20)
+
+change_with_model
+```
+

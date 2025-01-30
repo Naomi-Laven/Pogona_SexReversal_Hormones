@@ -1,0 +1,909 @@
+---
+title: "Model on non-reproductive female data"
+format: html
+---
+
+#### Libraries
+
+```{r, Package Install}
+pacman::p_load(ggplot2, car, dplyr, tidyr, brms, lubridate, patchwork)
+```
+
+```{r, Functions}
+#' @title pMCMC Function
+#' @param x The vector for the posterior distribution. Note that this will test the null hypothesis that the parameter of interest is significantly different from 0.
+#' @param null A numeric value decsribing what the null hypothesis should be
+#' @param twotail Whether to conduct a one-tailed hypothesis or a two-tailed hypotheses. Default = true indicating a two-tailed test will be done.
+pmcmc <- function(x, null = 0, twotail = TRUE){
+  if(twotail){
+    2*(1 - max(table(x<=null) / length(x)))
+  } else{
+    (1 - max(table(x<=null) / length(x)))
+  }
+}
+
+# Function for p-value rendering nicely
+#' @title p_value
+#' @description Checks p-value and assigned to catagories unless non-significant then gives actual p
+#' @param x the value to check against
+#' 
+p_value <- function(x){
+  if(x <= 0.0001) {tmp = "< 0.0001"}
+  if(x <= 0.001 & x >= 0.0001) {tmp ="< 0.001"}
+  if(x <= 0.01 & x >= 0.001) {tmp ="< 0.01"}
+  if(x >= 0.01) {tmp = round(x, digits =2)}
+  return(tmp)
+}
+
+post_summary <- function(x, name = "ZWF_Earl - ZZM_Earl"){
+  data.frame(Name = name, Est. = mean(x), `L 95% CI` = quantile(x, probs = c(0.025, 0.975))[1], `U 95% CI` = quantile(x, probs = c(0.025, 0.975))[2], p = p_value(pmcmc(x)), check.names = FALSE, row.names = NULL)
+}
+```
+
+
+
+
+### FINAL DATASET AND Manuscript figure
+Make combined figure of males and non-reproductive females
+
+
+```{r}
+#Create dataset of non-repro females
+log_pogdat2 <- read.csv("Datafiles/Final_AdultHormone_DataSheet.csv")
+
+#Set factors and numerical to avoid issues
+log_pogdat2$Gen_Sex<-as.factor(log_pogdat2$Gen_Sex)
+log_pogdat2$Sex<-as.factor(log_pogdat2$Sex)
+log_pogdat2$Testosterone<-as.numeric(log_pogdat2$Testosterone)
+
+#Make sure collection periods are presented in order
+log_pogdat2$Col_Period<- factor(log_pogdat2$Col_Period, levels=c('Earl', 'Mid', 'Late'))
+
+```
+
+```{r}
+#Apply log transformations to final dataset and create plot data
+log_pogdat2$logTestosterone <-log(log_pogdat2$Testosterone)
+log_pogdat2$logEstrogen     <-log(log_pogdat2$Estrogen_Final)
+
+plotdata <- subset(log_pogdat2, Reproduced == "N" | Reproduced == "M")
+
+plotdata$Gen_Sex<-factor(plotdata$Gen_Sex)
+```
+
+### Means of the groups
+
+```{r}
+#ZZM
+meansZZM <- plotdata %>%
+  filter(Gen_Sex == "ZZM", Col_Period %in% c("Earl", "Mid", "Late")) %>%
+  group_by(Col_Period) %>%
+  summarize(mean_logTestosterone = mean(logTestosterone, na.rm = TRUE), .groups = "drop")
+
+print(meansZZM)
+
+
+#ZZF
+meansZZF <- plotdata %>%
+  filter(Gen_Sex == "ZZF", Col_Period %in% c("Earl", "Mid", "Late")) %>%
+  group_by(Col_Period) %>%
+  summarize(mean_logTestosterone = mean(logTestosterone, na.rm = TRUE), .groups = "drop")
+
+print(meansZZF)
+
+
+
+#ZWF
+meansZWF <- plotdata %>%
+  filter(Gen_Sex == "ZWF", Col_Period %in% c("Earl", "Mid", "Late")) %>%
+  group_by(Col_Period) %>%
+  summarize(mean_logTestosterone = mean(logTestosterone, na.rm = TRUE), .groups = "drop")
+
+print(meansZWF)
+```
+
+```{r}
+#Range of all groups at the first timepoint
+
+#ZZM
+range_earl_ZZM <- plotdata %>%
+  filter(Gen_Sex == "ZZM", Col_Period == "Earl") %>%
+  summarize(range_Testosterone = range(Testosterone, na.rm = TRUE), .groups = "drop")
+
+print(range_earl_ZZM)
+
+
+```
+
+```{r}
+#Range of all groups at the first timepoint
+
+#ZZF
+range_earl_ZZF <- plotdata %>%
+  filter(Gen_Sex == "ZZF", Col_Period == "Earl") %>%
+  summarize(range_Testosterone = range(Testosterone, na.rm = TRUE), .groups = "drop")
+
+print(range_earl_ZZF)
+
+
+```
+
+```{r}
+#Range of all groups at the first timepoint
+
+#ZWF
+range_earl_ZWF <- plotdata %>%
+  filter(Gen_Sex == "ZWF", Col_Period == "Earl") %>%
+  summarize(range_Testosterone = range(Testosterone, na.rm = TRUE), .groups = "drop")
+
+print(range_earl_ZWF)
+
+
+```
+
+
+
+### Manuscript Figure
+
+```{r}
+#Testosterone
+
+Tnonrep <- ggplot(plotdata, aes(y = logTestosterone, x = Col_Period, fill = Gen_Sex)) +
+  geom_violin(alpha = 0.75) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.05, dodge.width = 0.9), size = 3, alpha = 0.5) + 
+  scale_fill_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) +  # Set fill colors
+  theme_classic() + 
+  ylab("Log Testosterone Concentration (pg/mL)") + 
+  xlab("Measurement Number") +
+  theme(text = element_text(size = 20)) +  coord_cartesian(ylim = c(0, 11.5)) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x)) 
+
+Tnonrep
+
+ggsave(filename = "AA_Tnonrep.png", path = "Pogona Hormones/output", width = 18, height = 10)
+
+
+```
+
+```{r}
+#Estradiol
+
+Enonrep <- ggplot(plotdata, aes(y = logEstrogen, x = Col_Period, fill = Gen_Sex)) +
+  geom_violin(alpha = 0.75) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.05, dodge.width = 0.9), size = 3, alpha = 0.5) + 
+  scale_fill_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) +  # Set fill colors
+  theme_classic() + 
+  ylab("Log Estradiol Concentration (pg/mL)") + 
+  xlab("Measurement Number") +
+  theme(text = element_text(size = 20)) + ylim(4.5, 6.5) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+
+Enonrep
+
+ggsave(filename = "AA_Enonrep.png", path = "Pogona Hormones/output", width = 18, height = 10)
+
+
+```
+
+
+```{r}
+#Combined
+
+combined_nonrepro <- Tnonrep / Enonrep
+
+
+combined_nonrepro
+
+
+ggsave(filename = "AA_combinednonrep.png", path = "Pogona Hormones/output", width = 16, height = 12)
+```
+
+### FINAL Model
+
+```{r}
+#Using above 'plotdata' dataset
+
+#Linear model on log-transformed data
+
+test  <- bf(logTestosterone | mi() ~ Gen_Sex*Col_Period  + (1|q|DragonID) + (1|Testosterone_plate))
+estro <- bf(logEstrogen     | mi() ~ Gen_Sex*Col_Period  + (1|q|DragonID) + (1|Estrogen_plate))
+
+# Fit two models 
+  modelnonrepro <- brm(
+    test + estro + set_rescor(TRUE),
+    data = plotdata,
+    family = gaussian(),
+    chains = 4,
+    cores = 4,
+    iter = 2000,
+    warmup = 1000,
+    control = list(adapt_delta = 0.99, max_treedepth = 15)
+  )
+```
+
+```{r}
+saveRDS(modelnonrepro, "Pogona Hormones/output/models/modelnonrepro.rds")
+```
+
+#### Check model
+
+```{r}
+model<-readRDS("Pogona Hormones/output/models/modelnonrepro.rds")
+```
+
+```{r}
+# Have a look at the model. 
+  summary(model)
+  plot(model)
+```
+
+#### Test Results before extraction
+
+```{r}
+# Extract the posterior samples
+posts_T  <- posterior_samples(model, pars = "b_logTestosterone")
+
+posts_E  <- posterior_samples(model, pars = "b_logEstrogen")
+```
+
+
+```{r}
+## Quick check to see everything's working - comparison of ZZF and ZWF early estrogen
+
+ZWF_early_estro <- posts_E$b_logEstrogen_Intercept
+ZZF_early_estro <- posts_E$b_logEstrogen_Intercept + posts_E$b_logEstrogen_Gen_SexZZF
+
+mean(ZZF_early_estro)
+quantile(ZZF_early_estro, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_estro)
+
+mean(ZZF_early_estro - ZWF_early_estro)
+quantile(ZZF_early_estro - ZWF_early_estro, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_estro - ZWF_early_estro)
+```
+
+```{r}
+## Quick check to see everything's working - comparison of ZZF and ZWF early testosterone
+
+ZWF_early_test <- posts_T$b_logTestosterone_Intercept
+ZZF_early_test <- posts_T$b_logTestosterone_Intercept + posts_T$b_logTestosterone_Gen_SexZZF
+
+mean(ZZF_early_test)
+quantile(ZZF_early_test, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_test)
+
+mean(ZZF_early_test - ZWF_early_test)
+quantile(ZZF_early_test - ZWF_early_test, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_test - ZWF_early_test)
+```
+
+
+#### Extract results as posterior distributions
+
+```{r}
+## predict 
+#TESTOSTERONE 
+
+     newdata <- plotdata  %>% group_by(Gen_Sex, Col_Period)  %>%  summarise(n=n())  %>% arrange(Col_Period)  %>%  select(-n)
+ predictions <-  cbind(newdata, fitted(model, newdata = newdata, summary = TRUE, re_formula = NA)[,,"logTestosterone"])
+
+
+# posterior distribution 
+ post_predictions <- fitted(model, newdata = newdata, summary = FALSE, re_formula = NA)[,,"logTestosterone"]
+ colnames(post_predictions) <- with(newdata, paste0(Gen_Sex, "_",Col_Period))
+ lapply(data.frame(post_predictions), mean)
+
+
+# Test by checking is ZWF different from ZZF early for logTestosterone? (compare to result from above test)
+  mean(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"])
+  quantile(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"], probs = c(0.025, 0.975))
+  pmcmc(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"])
+
+```
+
+```{r}
+## predict 
+#ESTRADIOL
+
+     newdata <- plotdata  %>% group_by(Gen_Sex, Col_Period)  %>%  summarise(n=n())  %>% arrange(Col_Period)  %>%  select(-n)
+ predictionsE <-  cbind(newdata, fitted(model, newdata = newdata, summary = TRUE, re_formula = NA)[,, "logEstrogen"])
+
+
+# posterior distribution 
+ post_predictionsE <- fitted(model, newdata = newdata, summary = FALSE, re_formula = NA)[,,"logEstrogen"]
+ colnames(post_predictionsE) <- with(newdata, paste0(Gen_Sex, "_",Col_Period))
+ lapply(data.frame(post_predictionsE), mean)
+
+ # Test by checking is ZWF different from ZZF early for logEstrogen? (compare to result from above test)
+  mean(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"])
+  quantile(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"], probs = c(0.025, 0.975))
+  pmcmc(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"])
+
+```
+
+### Extract results as tables of comparisons between means over time
+
+```{r}
+#TESTOSTERONE
+#Creating a table of pairwise comparisons between the means of the ZZF, ZWF and ZZF at each timepoint 
+
+
+TtabNR  <- post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"], name = "ZWF vs ZZF Early")
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZM_Earl"], name = "ZWF vs ZZM Early"))
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZZF_Earl"] - post_predictions[,"ZZM_Earl"], name = "ZZF vs ZZM Early"))
+
+TtabNR  <- rbind(TtabNR, post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZZF_Mid"], name = "ZWF vs ZZF Mid"))
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZZM_Mid"], name = "ZWF vs ZZM Mid"))
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZZF_Mid"] - post_predictions[,"ZZM_Mid"], name = "ZZF vs ZZM Mid"))
+
+TtabNR  <- rbind(TtabNR, post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZZF_Late"], name = "ZWF vs ZZF Late"))
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZZM_Late"], name = "ZWF vs ZZM Late"))
+
+TtabNR  <- rbind(TtabNR,post_summary(post_predictions[,"ZZF_Late"] - post_predictions[,"ZZM_Late"], name = "ZZF vs ZZM Late"))
+
+write.csv(TtabNR, file="Pogona Hormones/output/TtabNR.csv", row.names = FALSE)
+
+```
+
+```{r}
+#Estrogen
+#Creating a table of pairwise comparisons between the means of the ZZF, ZWF and ZZF at each timepoint 
+
+
+EtabNR  <- post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"], name = "ZWF vs ZZF Early")
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZM_Earl"], name = "ZWF vs ZZM Early"))
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZZF_Earl"] - post_predictionsE[,"ZZM_Earl"], name = "ZZF vs ZZM Early"))
+
+EtabNR <- rbind(EtabNR, post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZZF_Mid"], name = "ZWF vs ZZF Mid"))
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZZM_Mid"], name = "ZWF vs ZZM Mid"))
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZZF_Mid"] - post_predictionsE[,"ZZM_Mid"], name = "ZZF vs ZZM Mid"))
+
+EtabNR  <- rbind(EtabNR, post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZZF_Late"], name = "ZWF vs ZZF Late"))
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZZM_Late"], name = "ZWF vs ZZM Late"))
+
+EtabNR  <- rbind(EtabNR,post_summary(post_predictionsE[,"ZZF_Late"] - post_predictionsE[,"ZZM_Late"], name = "ZZF vs ZZM Late"))
+
+write.csv(EtabNR, file="Pogona Hormones/output/EtabNR.csv", row.names = FALSE)
+
+```
+
+
+### Extract results as tables of comparisons within groups across time 
+
+
+```{r}
+#TESTOSTERONE
+#Creating a table of pairwise comparisons with groups (ZZF, ZWF and ZZF) between each timepoint 
+
+#ZWF
+TtabNR_within <- post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZWF_Mid"], name = "ZWF Early vs Mid")
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZWF_Late"], name = "ZWF Mid vs Late"))
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZWF_Earl"], name = "ZWF Late vs Early"))
+
+#ZZF
+TtabNR_within <- rbind(TtabNR_within, post_summary(post_predictions[,"ZZF_Earl"] - post_predictions[,"ZZF_Mid"], name = "ZZF Early vs Mid"))
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZZF_Mid"] - post_predictions[,"ZZF_Late"], name = "ZZF Mid vs Late"))
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZZF_Late"] - post_predictions[,"ZZF_Earl"], name = "ZZF Late vs Early"))
+
+#ZZM
+TtabNR_within <- rbind(TtabNR_within, post_summary(post_predictions[,"ZZM_Earl"] - post_predictions[,"ZZM_Mid"], name = "ZZM Early vs Mid"))
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZZM_Mid"] - post_predictions[,"ZZM_Late"], name = "ZZM Mid vs Late"))
+
+TtabNR_within <- rbind(TtabNR_within,post_summary(post_predictions[,"ZZM_Late"] - post_predictions[,"ZZM_Earl"], name = "ZZM Late vs Early"))
+
+write.csv(TtabNR_within, file="Pogona Hormones/output/TtabNR_within.csv", row.names = FALSE)
+
+```
+
+```{r}
+#Estrogen
+#Creating a table of pairwise comparisons with groups (ZZF, ZWF and ZZF) between each timepoint 
+
+#ZWF
+EtabNR_within <- post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZWF_Mid"], name = "ZWF Early vs Mid")
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZWF_Late"], name = "ZWF Mid vs Late"))
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZWF_Earl"], name = "ZWF Late vs Early"))
+
+#ZZF
+EtabNR_within <- rbind(EtabNR_within, post_summary(post_predictionsE[,"ZZF_Earl"] - post_predictionsE[,"ZZF_Mid"], name = "ZZF Early vs Mid"))
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZZF_Mid"] - post_predictionsE[,"ZZF_Late"], name = "ZZF Mid vs Late"))
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZZF_Late"] - post_predictionsE[,"ZZF_Earl"], name = "ZZF Late vs Early"))
+
+#ZZM
+EtabNR_within <- rbind(EtabNR_within, post_summary(post_predictionsE[,"ZZM_Earl"] - post_predictionsE[,"ZZM_Mid"], name = "ZZM Early vs Mid"))
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZZM_Mid"] - post_predictionsE[,"ZZM_Late"], name = "ZZM Mid vs Late"))
+
+EtabNR_within <- rbind(EtabNR_within,post_summary(post_predictionsE[,"ZZM_Late"] - post_predictionsE[,"ZZM_Earl"], name = "ZZM Late vs Early"))
+
+write.csv(EtabNR_within, file="Pogona Hormones/output/EtabNR_within.csv", row.names = FALSE)
+
+```
+
+
+### Alternate version of manuscript plots with line guides for changes in means for the groups
+
+```{r}
+Tnonrep_hlines <- ggplot(plotdata, aes(y = logTestosterone, x = Col_Period, fill = Gen_Sex)) +
+  geom_violin(alpha = 0.75) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.05, dodge.width = 0.9), size = 3, alpha = 0.5) + 
+  scale_fill_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) +  # Set fill colors
+  theme_classic() + 
+  ylab("Log Testosterone Concentration (pg/mL)") + 
+  xlab("Measurement Number") +
+  theme(text = element_text(size = 20)) +  
+  coord_cartesian(ylim = c(0, 11.5)) +
+  theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x)) +
+  geom_hline(yintercept = 9.48, linetype = "dashed", color = "red", size = 1) + # First horizontal line
+  geom_hline(yintercept = 8.82, linetype = "dashed", color = "blue", size = 1) + # Second horizontal line
+   geom_hline(yintercept = 6.48, linetype = "dashed", color = "yellow", size = 1) +
+    geom_hline(yintercept = 4.27, linetype = "dashed", color = "purple", size = 1) +
+     geom_hline(yintercept = 6.71, linetype = "dashed", color = "grey", size = 1) +
+      geom_hline(yintercept = 5.30, linetype = "dashed", color = "black", size = 1)
+
+
+
+Tnonrep_hlines
+```
+
+```{r}
+#Estradiol
+
+Enonrep_hlines <- ggplot(plotdata, aes(y = logEstrogen, x = Col_Period, fill = Gen_Sex)) +
+  geom_violin(alpha = 0.75) +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(position = position_jitterdodge(jitter.width = 0.05, dodge.width = 0.9), size = 3, alpha = 0.5) + 
+  scale_fill_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) +  # Set fill colors
+  theme_classic() + 
+  ylab("Log Estradiol Concentration (pg/mL)") + 
+  xlab("Measurement Number") +
+  theme(text = element_text(size = 20)) + ylim(4.5, 6.5) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+
+Enonrep_hlines
+
+ggsave(filename = "AA_Enonrep.png", path = "Pogona Hormones/output", width = 18, height = 10)
+
+
+```
+
+
+```{r}
+#Combined
+
+combined_nonrepro_hlines <- Tnonrep_hlines / Enonrep_hlines
+
+
+combined_nonrepro_hlines
+
+
+ggsave(filename = "AA_combinednonrep_hlines.png", path = "Pogona Hormones/output", width = 16, height = 12)
+```
+
+
+### Visualising T and E2 Correlations
+
+```{r}
+# For reproductive females
+
+plotdata_repro <- subset(log_pogdat2, Reproduced == "Y" | Reproduced == "M" )
+plotdata_repro$Gen_Sex<-factor(plotdata_repro$Gen_Sex)
+
+plotdata_reproearly<-subset(plotdata_repro, Col_Period == "Earl")
+plotdata_repromid<-subset(plotdata_repro, Col_Period == "Mid")
+plotdata_reprolate<-subset(plotdata_repro, Col_Period == "Late")
+
+reproearlyplot<-ggplot(plotdata_reproearly, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex))+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5) + geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)")+ ylab(" Log Testosterone Concentration (pg/ml)")+ theme(text = element_text(size = 19)) +
+    theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+repromidplot<-ggplot(plotdata_repromid, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex))+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5)+ geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)")+ ylab(" Log Testosterone Concentration (pg/ml)")+ theme(text = element_text(size = 19)) +
+    theme(axis.line = element_line(linewidth = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+reprolateplot<-ggplot(plotdata_reprolate, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex))+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5)+ geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)") + ylab(" Log Testosterone Concentration (pg/ml)") + theme(text = element_text(size = 19)) +
+    theme(axis.line = element_line(linewidth = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+
+
+three_corplot_repro <- reproearlyplot + repromidplot + reprolateplot
+three_corplot_repro
+
+
+ggsave(filename = "reproCor_overtime.png", path = "Pogona Hormones/output", width = 25, height = 10)
+
+```
+
+```{r}
+# For males and non-reproductive females
+
+plotdata_early<-subset(plotdata, Col_Period == "Earl")
+plotdata_mid<-subset(plotdata, Col_Period == "Mid")
+plotdata_late<-subset(plotdata, Col_Period == "Late")
+
+earlyplot<-ggplot(plotdata_early, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex))+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5) + geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)")+ ylab(" Log Testosterone Concentration (pg/ml)")+ theme(text = element_text(size = 19)) +
+    theme(axis.line = element_line(linewidth = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+midplot<-ggplot(plotdata_mid, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex))+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5)+ geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)")+ ylab(" Log Testosterone Concentration (pg/ml)")+ theme(text = element_text(size = 19)) +
+    theme(axis.line = element_line(linewidth = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+lateplot<-ggplot(plotdata_late, aes(y = logTestosterone, x = logEstrogen, color = Gen_Sex)) +  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey", size = 2, alpha = 0.5) + geom_point(size = 5) + theme_classic()+ 
+  scale_color_manual(values = c("plum3", "darkolivegreen", "#4DB6AC")) + ylim(2, 12) + xlim(5, 6.5)+ geom_smooth(method = "lm", se = FALSE) + xlab("Log Estradiol Concentration (pg/ml)") + ylab(" Log Testosterone Concentration (pg/ml)") + theme(text = element_text(size = 19))  +
+    theme(axis.line = element_line(linewidth = 1), 
+        axis.ticks = element_line(linewidth = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+
+
+
+
+
+three_corplot <- earlyplot + midplot + lateplot
+three_corplot
+
+
+ggsave(filename = "Cor_overtime.png", path = "Pogona Hormones/output", width = 25, height = 10)
+
+```
+
+```{r}
+
+correlationsplot <- three_corplot_repro / three_corplot
+correlationsplot
+
+ggsave(filename = "FinalCor_overtime.pdf", path = "Pogona Hormones/output", width = 25, height = 17.5)
+```
+
+
+#### Overall ranges of Hormone Values
+
+```{r}
+
+#Testosterone Ranges
+
+# For ZZ Females
+range_femalesZZ <- plotdata %>% 
+  filter(Gen_Sex == "ZZF") %>% 
+  summarise(range = range(logTestosterone, na.rm = TRUE))
+
+# For ZW Females
+range_femalesZW <- plotdata %>% 
+  filter(Gen_Sex == "ZWF") %>% 
+  summarise(range = range(logTestosterone, na.rm = TRUE))
+
+
+# For Males
+range_males <- plotdata %>% 
+  filter(Gen_Sex == "ZZM") %>% 
+  summarise(range = range(logTestosterone, na.rm = TRUE))
+
+# Print the ranges
+print(range_femalesZZ)
+print(range_femalesZW)
+print(range_males)
+
+```
+
+```{r}
+
+#Estradiol Ranges
+
+# For ZZ Females
+range_femalesZZ <- plotdata %>% 
+  filter(Gen_Sex == "ZZF") %>% 
+  summarise(range = range(logEstrogen, na.rm = TRUE))
+
+# For ZW Females
+range_femalesZW <- plotdata %>% 
+  filter(Gen_Sex == "ZWF") %>% 
+  summarise(range = range(logEstrogen, na.rm = TRUE))
+
+
+# For Males
+range_males <- plotdata %>% 
+  filter(Gen_Sex == "ZZM") %>% 
+  summarise(range = range(logEstrogen, na.rm = TRUE))
+
+# Print the ranges
+print(range_femalesZZ)
+print(range_femalesZW)
+print(range_males)
+
+```
+
+### New alternate FINAL model that allows for random allocation of plateID for some missing datapoints 
+
+I have removed all double NAs from the dataset (samples that were never run for either T or E). This leaves a few samples were the T measuremnet was removed after running because of a high %CV (which have a T plate ID), and a few samples where estradiol was run but there was not enough sample to also do testosterone (do not have a T plate ID). 
+
+This new version of the model predicts hormone values for these missing samples, based on the other model parameters that are availible, and gives them random error. The previous model could only do this for samples that were originally run and had a plate ID, but could not predict samples without a plate ID. Here, we allow random allocation of a plate ID from the known plate IDs to those samples without. This is done 20 times to create 20 different full datasets. These datasets are run in the model, and their posterior distributions pooled. 
+
+Need to install the MICE package:
+
+```{r}
+pacman::p_load("mice")
+```
+
+
+Using the plotdata dataset from the final model above (which is using the latest version of the final adult hormone dataset). Imputes 20 datasets.
+```{r}
+imputed_plotdata <- mice(plotdata, m = 50, print = FALSE)
+```
+
+predictive mean matching
+
+Then running the final model, but on the 50 imputed datasets:
+```{r}
+#Using above 'plotdata' dataset
+#Linear model on log-transformed data
+
+test  <- bf(logTestosterone ~ Gen_Sex*Col_Period  + (1|q|DragonID) + (1|Testosterone_plate))
+estro <- bf(logEstrogen ~ Gen_Sex*Col_Period  + (1|q|DragonID) + (1|Estrogen_plate))
+
+# Fit two models 
+  model_mice <- brm_multiple(
+    test + estro + set_rescor(TRUE),
+    data = imputed_plotdata,
+    family = gaussian(),
+    chains = 4,
+    cores = 4,
+    iter = 2000,
+    warmup = 1000,
+    control = list(adapt_delta = 0.99, max_treedepth = 15)
+  )
+```
+
+```{r}
+saveRDS(model_mice, "Pogona Hormones/output/models/model_mice.rds")
+```
+
+#### Check model
+
+```{r}
+model<-readRDS("Pogona Hormones/output/models/model_mice.rds")
+```
+
+```{r}
+# Have a look at the model. 
+  summary(model)
+  plot(model)
+```
+
+#### Looking at the results of this model
+##### Test Results before extraction
+
+```{r}
+# Extract the posterior samples
+posts_T  <- posterior_samples(model, pars = "b_logTestosterone")
+
+posts_E  <- posterior_samples(model, pars = "b_logEstrogen")
+```
+
+
+```{r}
+## Quick check to see everything's working - comparison of ZZF and ZWF early estrogen
+
+ZWF_early_estro <- posts_E$b_logEstrogen_Intercept
+ZZF_early_estro <- posts_E$b_logEstrogen_Intercept + posts_E$b_logEstrogen_Gen_SexZZF
+
+mean(ZZF_early_estro)
+quantile(ZZF_early_estro, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_estro)
+
+mean(ZZF_early_estro - ZWF_early_estro)
+quantile(ZZF_early_estro - ZWF_early_estro, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_estro - ZWF_early_estro)
+```
+
+```{r}
+## Quick check to see everything's working - comparison of ZZF and ZWF early testosterone
+
+ZWF_early_test <- posts_T$b_logTestosterone_Intercept
+ZZF_early_test <- posts_T$b_logTestosterone_Intercept + posts_T$b_logTestosterone_Gen_SexZZF
+
+mean(ZZF_early_test)
+quantile(ZZF_early_test, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_test)
+
+mean(ZZF_early_test - ZWF_early_test)
+quantile(ZZF_early_test - ZWF_early_test, probs = c(0.025, 0.975))
+pmcmc(ZZF_early_test - ZWF_early_test)
+```
+
+##### Extract results as posterior distributions
+
+```{r}
+## predict 
+#TESTOSTERONE 
+
+     newdata <- plotdata  %>% group_by(Gen_Sex, Col_Period)  %>%  summarise(n=n())  %>% arrange(Col_Period)  %>%  select(-n)
+ predictions <-  cbind(newdata, fitted(model, newdata = newdata, summary = TRUE, re_formula = NA)[,,"logTestosterone"])
+
+
+# posterior distribution 
+ post_predictions <- fitted(model, newdata = newdata, summary = FALSE, re_formula = NA)[,,"logTestosterone"]
+ colnames(post_predictions) <- with(newdata, paste0(Gen_Sex, "_",Col_Period))
+ lapply(data.frame(post_predictions), mean)
+
+
+# Test by checking is ZWF different from ZZF early for logTestosterone? (compare to result from above test)
+  mean(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"])
+  quantile(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"], probs = c(0.025, 0.975))
+  pmcmc(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"])
+
+```
+
+```{r}
+## predict 
+#ESTRADIOL
+
+     newdata <- plotdata  %>% group_by(Gen_Sex, Col_Period)  %>%  summarise(n=n())  %>% arrange(Col_Period)  %>%  select(-n)
+ predictionsE <-  cbind(newdata, fitted(model, newdata = newdata, summary = TRUE, re_formula = NA)[,, "logEstrogen"])
+
+
+# posterior distribution 
+ post_predictionsE <- fitted(model, newdata = newdata, summary = FALSE, re_formula = NA)[,,"logEstrogen"]
+ colnames(post_predictionsE) <- with(newdata, paste0(Gen_Sex, "_",Col_Period))
+ lapply(data.frame(post_predictionsE), mean)
+
+ # Test by checking is ZWF different from ZZF early for logEstrogen? (compare to result from above test)
+  mean(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"])
+  quantile(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"], probs = c(0.025, 0.975))
+  pmcmc(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"])
+
+```
+
+##### Extract results as tables of comparisons between means over time
+
+```{r}
+#TESTOSTERONE
+#Creating a table of pairwise comparisons between the means of the ZZF, ZWF and ZZF at each timepoint 
+
+
+TtabNR_MICE  <- post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZF_Earl"], name = "ZWF vs ZZF Early")
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZZM_Earl"], name = "ZWF vs ZZM Early"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZZF_Earl"] - post_predictions[,"ZZM_Earl"], name = "ZZF vs ZZM Early"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE , post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZZF_Mid"], name = "ZWF vs ZZF Mid"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZZM_Mid"], name = "ZWF vs ZZM Mid"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZZF_Mid"] - post_predictions[,"ZZM_Mid"], name = "ZZF vs ZZM Mid"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE , post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZZF_Late"], name = "ZWF vs ZZF Late"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZZM_Late"], name = "ZWF vs ZZM Late"))
+
+TtabNR_MICE   <- rbind(TtabNR_MICE ,post_summary(post_predictions[,"ZZF_Late"] - post_predictions[,"ZZM_Late"], name = "ZZF vs ZZM Late"))
+
+write.csv(TtabNR_MICE , file="Pogona Hormones/output/TtabNR_MICE .csv", row.names = FALSE)
+
+```
+
+```{r}
+#Estrogen
+#Creating a table of pairwise comparisons between the means of the ZZF, ZWF and ZZF at each timepoint 
+
+
+EtabNR_MICE  <- post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZF_Earl"], name = "ZWF vs ZZF Early")
+
+EtabNR_MICE <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZZM_Earl"], name = "ZWF vs ZZM Early"))
+
+EtabNR_MICE  <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZZF_Earl"] - post_predictionsE[,"ZZM_Earl"], name = "ZZF vs ZZM Early"))
+
+EtabNR_MICE <- rbind(EtabNR_MICE, post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZZF_Mid"], name = "ZWF vs ZZF Mid"))
+
+EtabNR_MICE  <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZZM_Mid"], name = "ZWF vs ZZM Mid"))
+
+EtabNR_MICE <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZZF_Mid"] - post_predictionsE[,"ZZM_Mid"], name = "ZZF vs ZZM Mid"))
+
+EtabNR_MICE  <- rbind(EtabNR_MICE, post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZZF_Late"], name = "ZWF vs ZZF Late"))
+
+EtabNR_MICE  <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZZM_Late"], name = "ZWF vs ZZM Late"))
+
+EtabNR_MICE  <- rbind(EtabNR_MICE,post_summary(post_predictionsE[,"ZZF_Late"] - post_predictionsE[,"ZZM_Late"], name = "ZZF vs ZZM Late"))
+
+write.csv(EtabNR_MICE, file="Pogona Hormones/output/EtabNR_MICE.csv", row.names = FALSE)
+
+```
+
+##### Extract results as tables of comparisons within groups across time 
+
+
+```{r}
+#TESTOSTERONE
+#Creating a table of pairwise comparisons with groups (ZZF, ZWF and ZZF) between each timepoint 
+
+#ZWF
+TtabNR_within_MICE <- post_summary(post_predictions[,"ZWF_Earl"] - post_predictions[,"ZWF_Mid"], name = "ZWF Early vs Mid")
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZWF_Mid"] - post_predictions[,"ZWF_Late"], name = "ZWF Mid vs Late"))
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZWF_Late"] - post_predictions[,"ZWF_Earl"], name = "ZWF Late vs Early"))
+
+#ZZF
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE, post_summary(post_predictions[,"ZZF_Earl"] - post_predictions[,"ZZF_Mid"], name = "ZZF Early vs Mid"))
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZZF_Mid"] - post_predictions[,"ZZF_Late"], name = "ZZF Mid vs Late"))
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZZF_Late"] - post_predictions[,"ZZF_Earl"], name = "ZZF Late vs Early"))
+
+#ZZM
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE, post_summary(post_predictions[,"ZZM_Earl"] - post_predictions[,"ZZM_Mid"], name = "ZZM Early vs Mid"))
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZZM_Mid"] - post_predictions[,"ZZM_Late"], name = "ZZM Mid vs Late"))
+
+TtabNR_within_MICE <- rbind(TtabNR_within_MICE,post_summary(post_predictions[,"ZZM_Late"] - post_predictions[,"ZZM_Earl"], name = "ZZM Late vs Early"))
+
+write.csv(TtabNR_within_MICE, file="Pogona Hormones/output/TtabNR_within_MICE.csv", row.names = FALSE)
+
+```
+
+```{r}
+#Estrogen
+#Creating a table of pairwise comparisons with groups (ZZF, ZWF and ZZF) between each timepoint 
+
+#ZWF
+EtabNR_within_MICE <- post_summary(post_predictionsE[,"ZWF_Earl"] - post_predictionsE[,"ZWF_Mid"], name = "ZWF Early vs Mid")
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZWF_Mid"] - post_predictionsE[,"ZWF_Late"], name = "ZWF Mid vs Late"))
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZWF_Late"] - post_predictionsE[,"ZWF_Earl"], name = "ZWF Late vs Early"))
+
+#ZZF
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE, post_summary(post_predictionsE[,"ZZF_Earl"] - post_predictionsE[,"ZZF_Mid"], name = "ZZF Early vs Mid"))
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZZF_Mid"] - post_predictionsE[,"ZZF_Late"], name = "ZZF Mid vs Late"))
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZZF_Late"] - post_predictionsE[,"ZZF_Earl"], name = "ZZF Late vs Early"))
+
+#ZZM
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE, post_summary(post_predictionsE[,"ZZM_Earl"] - post_predictionsE[,"ZZM_Mid"], name = "ZZM Early vs Mid"))
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZZM_Mid"] - post_predictionsE[,"ZZM_Late"], name = "ZZM Mid vs Late"))
+
+EtabNR_within_MICE <- rbind(EtabNR_within_MICE,post_summary(post_predictionsE[,"ZZM_Late"] - post_predictionsE[,"ZZM_Earl"], name = "ZZM Late vs Early"))
+
+write.csv(EtabNR_within_MICE, file="Pogona Hormones/output/EtabNR_within_MICE.csv", row.names = FALSE)
+
+```

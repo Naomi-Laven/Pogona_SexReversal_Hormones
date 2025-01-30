@@ -1,0 +1,900 @@
+---
+title: "Yolk Data Analysis"
+author: "Naomi Laven"
+date: "2023-10-19"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+### Packages
+```{r}
+pacman::p_load(ggplot2, tidyverse, car, patchwork)
+```
+
+### Data Load-In and transformation
+
+```{r}
+#NEW RESULTS WITH all data readjusted as in supplementary section 2.
+
+yolkdatv3<-read.csv("Datafiles/yolkresultsv3.csv")
+#Make momid a factor not a number
+yolkdatv3$MomID<- factor(yolkdatv3$MomID,)
+
+yolkdatv3$logE <- log(yolkdatv3$finalE.pg.mg.)
+yolkdatv3$logT <- log(yolkdatv3$finalT.pg.mg.)
+
+```
+
+
+### YOlk Mass Associations
+
+```{r}
+mass_assoc_T <- ggplot(yolkdatv3, aes(x = EggMass, y = logT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Egg Mass (g)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")
+
+mass_assoc_T
+
+lm_mass_assoc_T <- summary(lm(yolkdatv3$EggMass~yolkdatv3$logT))
+lm_mass_assoc_T
+```
+
+```{r}
+mass_assoc_E <- ggplot(yolkdatv3, aes(x = EggMass, y = logE, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Egg Mass (g)") + 
+  ylab("Log Estradiol Concentration (pg/mg)")
+
+mass_assoc_E
+
+lm_mass_assoc_E <- summary(lm(yolkdatv3$EggMass~yolkdatv3$logE))
+lm_mass_assoc_E
+```
+
+```{r}
+combinedMass <- mass_assoc_T / mass_assoc_E
+combinedMass
+
+ggsave(filename = "yolkhorMass_assoc.png", path = "Pogona Hormones/output", width = 15, height = 20)
+```
+
+Laying order?
+```{r}
+ggplot(yolkdatv3, aes(y = EggMass, x = EggNo)) + geom_point(aes(shape = MomGeno, color = MomID), size = 6) + geom_smooth(method = "lm", color = "black")+ theme_classic() +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) + ylim(2.5, 5) + xlim(1, 25) + ylab("Egg Mass (g)") + xlab("Egg Number")
+
+ggsave(filename = "Layorder_vs_Mass.png", path = "Pogona Hormones/output", width = 10, height = 20)
+
+```
+
+```{r}
+plot(yolkdatv3$EggNo~yolkdatv3$logE)
+summary(lm(yolkdatv3$EggNo~yolkdatv3$logE))
+
+```
+
+```{r}
+plot(yolkdatv3$EggNo~yolkdatv3$logT)
+summary(lm(yolkdatv3$EggNo~yolkdatv3$logT))
+
+```
+
+
+### Corrected for Yolk Mass?
+
+```{r}
+yolkdatv3$masscorrectedE <- (yolkdatv3$finalE.pg.mg.*yolkdatv3$EggMass)
+yolkdatv3$masscorrectedT <- (yolkdatv3$finalT.pg.mg.*yolkdatv3$EggMass)
+```
+
+```{r}
+qqPlot(yolkdatv3$mass_corrected_E.pg.mg.)
+```
+```{r}
+qqPlot(yolkdatv3$mass_corrected_T.pg.mg.)
+```
+
+```{r}
+yolkdatv3$logmcE <- (log(yolkdatv3$masscorrectedE))
+yolkdatv3$logmcT <- (log(yolkdatv3$masscorrectedT))
+```
+
+```{r}
+qqPlot(yolkdatv3$logmcE)
+```
+```{r}
+qqPlot(yolkdatv3$logmcT)
+```
+
+```{r}
+
+ggplot(yolkdatv3, aes(x = logmcE, y = logmcT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (total)") + 
+  ylab("Log Estradiol Concentration (total)")
+
+
+summary(lm(yolkdatv3$logmcE~yolkdatv3$logmcT))
+
+ggsave(filename = "MASSCORRyolkhor_assoc.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+```{r}
+mass_assoc_T <- ggplot(yolkdatv3, aes(x = EggMass, y = logmcT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Egg Mass (grams)") + 
+  ylab("Log Testosterone Concentration (total)")
+
+mass_assoc_T
+
+lm_mass_assoc_T <- summary(lm(yolkdatv3$EggMass~yolkdatv3$logmcT))
+lm_mass_assoc_T
+```
+
+```{r}
+mass_assoc_E <- ggplot(yolkdatv3, aes(x = EggMass, y = logmcE, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Egg Mass (grams)") + 
+  ylab("Log Estradiol Concentration (total)")
+
+mass_assoc_E
+
+lm_mass_assoc_E <- summary(lm(yolkdatv3$EggMass~yolkdatv3$logmcE))
+lm_mass_assoc_E
+```
+
+```{r}
+combinedMass <- mass_assoc_T / mass_assoc_E
+combinedMass
+
+ggsave(filename = "yolkhorMass_assoc.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+### T/E2 Concentration Correlation Plot
+```{r}
+# Create the plot
+hormoneassoc <- ggplot(yolkdatv3, aes(x = logE, y = logT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (pg/mg)") + 
+  ylab("Log Estradiol Concentration (pg/mg)")
+
+# Print the plot
+
+print(hormoneassoc)
+ggsave(filename = "yolkhor_assoc.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+
+### Clutch Averages Calcuation
+```{r}
+avg_concentrations <- yolkdatv3 %>%
+  group_by(MomID) %>%
+  summarize(Avg_T = mean(logT),
+            Avg_E2 = mean(logE), AvgEggMass = mean(EggMass))
+
+# Print the table
+print(avg_concentrations)
+
+
+```
+
+```{r}
+#For Mass Corrected Data (Wed 17th July)
+clutch_avgs <- yolkdatv3 %>%
+  group_by(MomID) %>%
+  summarize(Avg_mcT = mean(logmcT),
+            Avg_mcE2 = mean(logmcE), AvgEggMass = mean(EggMass))
+
+# Print the table
+print(clutch_avgs)
+
+
+```
+
+```{r}
+#Quickly checking if correlation between T and E persists for weight-corrected clutch averages
+plot(clutch_avgs$Avg_mcT~clutch_avgs$Avg_mcE2)
+```
+
+
+### Visualising the hormones of clutch mothers
+
+```{r}
+pogdat<-read.csv("Datafiles/Final_AdultHormone_DataSheet.csv")
+
+#Set factors and numerical to avoid issues
+pogdat$Gen_Sex<-as.factor(pogdat$Gen_Sex)
+pogdat$Sex<-as.factor(pogdat$Sex)
+pogdat$Testosterone<-as.numeric(pogdat$Testosterone)
+
+#Make sure collection periods are presented in order
+pogdat$Col_Period<- factor(pogdat$Col_Period, levels=c('Earl', 'Mid', 'Late'))
+
+```
+
+```{r}
+#Refine dataset down to mothers of tested clutches only 
+
+targetIDs<-c("3505", "9152", "9520", "9555", "9559", "9570", "81803", "82142")
+pogdat_hormoms<- 
+  pogdat %>%
+  filter(DragonID %in% targetIDs)
+
+pogdat_hormoms$DragonID<- factor(pogdat_hormoms$DragonID, levels=c("3505", "9152", "9520", "9555", "9559", "9570", "81803", "82142"))
+
+#Remove CVs over 50
+pogdat_hormoms <- pogdat_hormoms %>%
+  filter(Testosterone_CV <= 50)
+
+```
+
+```{r}
+#log transform hromone data 
+
+pogdat_hormoms$logT<-log(pogdat_hormoms$Testosterone)
+pogdat_hormoms$logE<-log(pogdat_hormoms$Estrogen_Final)
+
+```
+
+```{r}
+
+#Estradiol of Yolk Mothers
+
+Emother <- ggplot(pogdat_hormoms, aes(x = DragonID, y = logE, fill = Gen_Sex)) + geom_boxplot() + geom_point(aes(shape = Col_Period), size = 6, alpha = 0.75) + theme_classic() + scale_fill_manual(values = c("#809063", "#dab0da"))+
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(fill = "Genotype") + 
+  xlab("Dragon ID") + 
+  ylab("Log Estradiol Concentration (pg/ml)")
+
+Emother
+```
+
+```{r}
+
+#Testosterone of Yolk Mothers
+
+Tmother<-ggplot(pogdat_hormoms, aes(x = DragonID, y = logT, fill = Gen_Sex)) + geom_boxplot() + geom_point(aes(shape = Col_Period), size = 6, alpha = 0.75) + theme_classic() + scale_fill_manual(values = c("#809063", "#dab0da"))+
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(fill = "Genotype") +  labs(shape = "Sample Period")+
+  xlab("Dragon ID") + 
+  ylab("Log Testosterone Concentration (pg/ml)")
+
+Tmother
+```
+
+```{r}
+motherhormones <- Tmother / Emother
+motherhormones
+ggsave(filename = "motherhormones.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+#### Mother's Average Hormone Concentrations 
+
+```{r}
+avg_Mother <- pogdat_hormoms %>%
+  group_by(DragonID) %>%
+  summarize(Avg_T = mean(logT),
+            Avg_E2 = mean(logE))
+
+# Print the table
+print(avg_Mother)
+
+```
+
+#### Combine mother avergaes and offspring individual yolks
+```{r}
+avg_Mother <- avg_Mother %>%
+  rename(MomID = DragonID)
+combined_data <- merge(yolkdatv3, avg_Mother, by = "MomID")
+
+```
+
+```{r}
+#Visualise
+
+#Testosterone 
+ggplot(combined_data, aes(x = Avg_T, y = logT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (pg/ml)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+summary(lm(combined_data$Avg_T~combined_data$logT))
+
+```
+
+```{r}
+#Estradiol
+ggplot(combined_data, aes(x = Avg_E2, y = logE, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (pg/ml)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+summary(lm(combined_data$Avg_E2~combined_data$logE))
+
+ggsave(filename = "motheroffspringE2_indv.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+
+#### Combine mother/offspring averages
+```{r}
+avg_Mother <- avg_Mother %>%
+  rename(MomID = DragonID)
+
+mother_offspring_avghormones <- avg_concentrations %>%
+  left_join(avg_Mother, by = "MomID")
+
+
+```
+
+
+```{r}
+mc_motheroffspring <- clutch_avgs %>%
+  left_join(avg_Mother, by = "MomID")
+```
+
+
+
+#### Add genotype info back in for mums
+
+```{r}
+mom_geno_values <- c("ZW", "ZW", "ZZ", "ZZ", "ZZ", "ZW", "ZZ", "ZW")
+mother_offspring_avghormones <- mother_offspring_avghormones %>%
+  mutate(MomGeno = mom_geno_values)
+```
+
+```{r}
+mom_geno_values <- c("ZW", "ZW", "ZZ", "ZZ", "ZZ", "ZW", "ZZ", "ZW")
+mc_motheroffspring <- mc_motheroffspring %>%
+  mutate(MomGeno = mom_geno_values)
+```
+
+
+### Is clutch hromones associated with clutch mean egg mass?
+
+```{r}
+#Testosterone
+T_eggmass <- ggplot(yolkdatv3, aes(x = AvgEggMass, y = Avg_T.x, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Mean Egg Mass (grams)") + 
+  ylab("Mean Log Testosterone Concentration (pg/ml)")+
+  scale_shape_manual(values = shape_mapping)
+
+summary(lm(mother_offspring_avghormones$AvgEggMass~mother_offspring_avghormones$Avg_T.x))
+
+```
+
+```{r}
+#Estradiol
+E_eggmass <- ggplot(mother_offspring_avghormones, aes(x = AvgEggMass, y = Avg_E2.x, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Mean Egg Mass (grams)") + 
+  ylab("Mean Log Estradiol Concentration (pg/ml)")+
+  scale_shape_manual(values = shape_mapping)
+
+  summary(lm(mother_offspring_avghormones$AvgEggMass~mother_offspring_avghormones$Avg_E2.x))
+
+```
+
+
+```{r}
+eggmass_hormones <- T_eggmass/E_eggmass
+eggmass_hormones
+ggsave(filename = "eggmass_hormones.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+
+#### Is mother's estradiol related to egg size?
+
+```{r}
+
+ggplot(mc_motheroffspring, aes(x = Avg_E2, y = AvgEggMass, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Estradiol Concentration (pg/ml)") + 
+  ylab("Mean Egg Mass (grams)")+
+  scale_shape_manual(values = shape_mapping)
+
+  summary(lm(mc_motheroffspring$AvgEggMass~mc_motheroffspring$Avg_E2))
+
+
+ggsave(filename = "motherE_vs_Mass.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+
+#### Regressions
+```{r}
+shape_mapping <- c("ZW" = 17, "ZZ" = 16)
+
+```
+
+```{r}
+
+momoff_T <- ggplot(mother_offspring_avghormones, aes(x = Avg_T.y, y = Avg_T.x, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (pg/ml)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+momoff_T
+
+quickmodelT <- summary(lm(mother_offspring_avghormones$Avg_T.x~mother_offspring_avghormones$Avg_T.y))
+
+quickmodelT 
+```
+
+```{r}
+
+momoff_E <- ggplot(mother_offspring_avghormones, aes(x = Avg_E2.y, y = Avg_E2.x, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Estradiol Concentration (pg/ml)") + 
+  ylab("Log Estradiol Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+momoff_E
+
+quickmodelRe <- summary(lm(mother_offspring_avghormones$Avg_E2.x~mother_offspring_avghormones$Avg_E2.y))
+
+quickmodelRe 
+```
+
+
+```{r}
+correlations_together <- momoff_T / momoff_E 
+correlations_together
+
+ggsave(filename = "motheroffspring_hormones.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+### MC versions of mother/offspring plots
+
+```{r}
+
+momoff_T <- ggplot(mc_motheroffspring, aes(x = Avg_T, y = Avg_mcT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Testosterone Concentration (pg/ml)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+momoff_T
+
+quickmodelT <- summary(lm(mc_motheroffspring$Avg_T~mc_motheroffspring$Avg_mcT))
+
+quickmodelT 
+```
+
+```{r}
+
+momoff_E <- ggplot(mc_motheroffspring, aes(x = Avg_E2, y = Avg_mcE2, color = MomID)) + 
+  geom_point(aes(shape = MomGeno), size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Estradiol Concentration (pg/ml)") + 
+  ylab("Log Estradiol Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+momoff_E
+
+quickmodelRe <- summary(lm(mc_motheroffspring$Avg_E2~mc_motheroffspring$Avg_mcE2))
+
+quickmodelRe 
+```
+
+
+```{r}
+correlations_together <- momoff_T / momoff_E 
+correlations_together
+
+ggsave(filename = "motheroffspring_hormones.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+```{r}
+
+momoff_T <- ggplot(mc_motheroffspring, aes(x = Avg_E2, y = Avg_mcT, color = MomID)) + 
+  geom_point(aes(shape = MomGeno),size = 6) + 
+  theme_classic() + 
+  geom_smooth(method = lm, color = "black") +
+  theme(text = element_text(size = 25)) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  labs(color = "Mother's ID") + 
+  xlab("Log Estradiol Concentration (pg/ml)") + 
+  ylab("Log Testosterone Concentration (pg/mg)")+
+  scale_shape_manual(values = shape_mapping)
+
+momoff_T
+
+quickmodelT <- summary(lm(mc_motheroffspring$Avg_E2~mc_motheroffspring$Avg_mcT))
+
+quickmodelT 
+
+ggsave(filename = "offT_mothE_hormones.png", path = "Pogona Hormones/output", width = 13, height = 15)
+```
+
+
+### Mean egg sizes of clutch mothers
+
+```{r}
+ggplot(yolkdatv3, aes(y = EggMass, x = MomID, fill = MomGeno)) + geom_boxplot() + geom_point() + scale_fill_manual(values = c( "#dab0da","#809063")) + theme_classic() + xlab("Mother's ID") + ylab("Egg Mass (g)") + theme(text = element_text(size = 25)) + theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) + ylim(2.75, 5)
+
+ggsave(filename = "MassbyMother.png", path = "Pogona Hormones/output", width = 10, height = 12)
+
+```
+
+
+### Models to look at sources of variance in the dataset
+
+```{r}
+pacman::p_load(lme4, rptR, lmerTest)
+```
+
+
+### Base models and rptR bootstrapping
+
+```{r}
+#Base T model
+
+pog_modelT1<-lmer(logT ~ 1 + (1|MomID), data = yolkdat)
+
+summary(pog_modelT1)
+```
+
+```{r}
+#Base T model
+
+pog_modelT1<-lmer(logT ~ 1 + (1|MomID), data = yolkdatv3)
+
+summary(pog_modelT1)
+```
+
+```{r}
+#Bootstrapping repeatibility and uncertainty with rptR
+#Quick histo as a normality check, using gaussain distribution for rptR
+hist(yolkdatv3$logT)
+
+#Base test rpt no bootstrapping
+
+rpt(logT ~ 1 + (1|MomID), grname = "MomID", data = yolkdatv3, datatype = "Gaussian", 
+    nboot = 0, npermut = 0)
+
+```
+
+```{r}
+
+#Bootstrapped repeatibility 
+
+rptT1 <- rpt(logT ~ 1 + (1|MomID), grname = "MomID", data = yolkdatv3, datatype = "Gaussian", 
+    nboot = 5000, npermut = 0)
+
+#Pretty massive confidence intervals on the variance explained by Mother/Clutch, but does not cross O and has p<0.005? Have I interpreted this correctly?
+
+```
+
+
+```{r}
+#Base E model
+
+pog_modelE1<-lmer(logE ~ 1 + (1|MomID), data = yolkdatv3)
+
+summary(pog_modelE1)
+```
+
+```{r}
+#Bootstrapping repeatibility and uncertainty with rptR
+#Quick histo as a normality check, using gaussain distribution for rptR
+hist(yolkdatv3$logE)
+
+#Base test rpt no bootstrapping
+
+rpt(logE ~ 1 + (1|MomID), grname = "MomID", data = yolkdatv3, datatype = "Gaussian", 
+    nboot = 0, npermut = 0)
+
+```
+
+```{r}
+
+#Bootstrapped repeatibility 
+
+rptE1 <- rpt(logE ~ 1 + (1|MomID), grname = "MomID", data = yolkdatv3, datatype = "Gaussian", 
+    nboot = 5000, npermut = 0)
+
+
+```
+
+
+### Model 2 with MomGeno
+
+```{r}
+# T model with MomGeno
+
+pog_modelT2<-lmer(logT ~ MomGeno + (1|MomID), data = yolkdatv3)
+
+summary(pog_modelT2)
+```
+
+```{r}
+
+#Bootstrapped repeatibility 
+
+rptT2 <- rpt(logT ~ MomGeno + (1|MomID), grname = "MomID", data = yolkdatv3, datatype = "Gaussian", 
+    nboot = 5000, npermut = 0)
+
+
+```
+
+
+
+
+```{r}
+# E model with MomGeno
+
+pog_modelE2<-lmer(logE ~ MomGeno + (1|MomID), data = yolkdatv3)
+
+summary(pog_modelE2)
+```
+
+### Manuscript Yolk Figure
+```{r}
+Tyolksv3 <- ggplot(yolkdatv3, aes(x=MomID, y=logT, fill = MomGeno)) + geom_violin(alpha = 0.75, width = 1) + geom_boxplot(width = 0.05, position = position_dodge(0.9)) + geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) + scale_fill_manual(values = c("plum3", "darkolivegreen")) + ylab("Log Testosterone Concentration (pg/mg)") + xlab("Mother's ID") + theme_classic() +  theme(text = element_text(size = 25)) + ylim (-2.5, 1) + theme(axis.line = element_line(size = 1), axis.ticks = element_line(size = 1)) +
+  theme(axis.ticks.length = unit(0.3, "cm"))
+
+Tyolksv3 
+
+
+ggsave(filename = "AAA3_TestoClutch_plot.png", path = "Pogona Hormones/output", width = 15, height = 10)
+```
+
+```{r}
+
+Eyolks3 <- ggplot(yolkdatv3, aes(x = MomID, y = logE, fill = MomGeno)) +
+  geom_violin(alpha = 0.75, width = 1) +
+  geom_boxplot(width = 0.05, position = position_dodge(0.9)) +
+  geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +
+  ylab("Log Estradiol Concentration (pg/mg)") +
+  xlab("Mother's ID") +
+  theme_classic() +
+  theme(text = element_text(size = 25)) +
+  coord_cartesian(ylim = c(-3.5, 0)) +  # Preserve ylim settings
+  theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x)) 
+
+print(Eyolks3)
+ggsave(filename = "AAA3_EstradiolClutch_plot.png", path = "Pogona Hormones/output", width = 15, height = 10)
+
+```
+
+```{r}
+finalyolkplot3<- Tyolksv3 / Eyolks3
+
+finalyolkplot3
+
+ggsave(filename = "AAA3_Clutch_plot.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+### Manuscript plot retry
+```{r}
+library(ggplot2)
+library(patchwork)  # For combining plots
+
+#Order MomID so that the ZW and ZZ females are presented next to each other
+
+yolkdatv3$MomID <- factor(yolkdatv3$MomID, levels = c("9520", "9555", "9559", "81803", "3505", "9152", "9570", "82142"))
+
+# Plot for Testosterone Concentration
+Tyolksv3 <- ggplot(yolkdatv3, aes(x = MomID, y = logT, fill = MomGeno)) +
+  geom_violin(alpha = 0.75, width = 0.4, scale = "width") +
+  geom_boxplot(width = 0.05, position = position_dodge(0.9)) +
+  geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +
+  ylab("Log Testosterone Concentration (pg/mg)") +
+  xlab("Mother's ID") +
+  theme_classic() +
+  theme(text = element_text(size = 25)) +
+  ylim(-2.5, 1) +
+  theme(axis.line = element_line(size = 1),
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm"))
+
+print(Tyolksv3)
+ggsave(filename = "AAA3_TestoClutch_plot.png", path = "Pogona Hormones/output", width = 15, height = 10)
+
+# Plot for Estradiol Concentration
+Eyolks3 <- ggplot(yolkdatv3, aes(x = MomID, y = logE, fill = MomGeno)) +
+  geom_violin(alpha = 0.75, width = 0.4, scale = "width") +
+  geom_boxplot(width = 0.05, position = position_dodge(0.9)) +
+  geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +
+  ylab("Log Estradiol Concentration (pg/mg)") +
+  xlab("Mother's ID") +
+  theme_classic() +
+  theme(text = element_text(size = 25)) +
+  coord_cartesian(ylim = c(-3.5, 0)) +  # Preserve ylim settings
+  theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x))
+
+print(Eyolks3)
+ggsave(filename = "AAA3_EstradiolClutch_plot.png", path = "Pogona Hormones/output", width = 15, height = 10)
+
+# Combine the two plots
+finalyolkplot3 <- Tyolksv3 / Eyolks3
+```
+
+```{r}
+print(finalyolkplot3)
+ggsave(filename = "anomaloplot.png", path = "Pogona Hormones/output", width = 16, height = 15)
+```
+
+### Mean cluthc measurements for ZZ and ZW clutches
+
+```{r}
+Eyolksmean <- ggplot(yolkdatv3, aes(x = MomGeno, y = logE, fill = MomGeno)) +
+  geom_violin(alpha = 0.75, width = 0.4, scale = "width") +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +
+  ylab("Log Estradiol Concentration (pg/mg)") +
+  xlab("Mother's Genotype") +
+  theme_classic() +
+  theme(text = element_text(size = 25)) +
+  coord_cartesian(ylim = c(-3.5, 0)) +  # Preserve ylim settings
+  theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x))
+
+print(Eyolksmean)
+
+```
+
+```{r}
+Tyolksmean <- ggplot(yolkdatv3, aes(x = MomGeno, y = logT, fill = MomGeno)) +
+  geom_violin(alpha = 0.75, width = 0.4, scale = "width") +
+  geom_boxplot(width = 0.1, position = position_dodge(0.9)) +
+  geom_point(size = 5, position = position_dodge(width = 0.2), alpha = 0.75) +
+  scale_fill_manual(values = c("plum3", "darkolivegreen")) +
+  ylab("Log Testosterone Concentration (pg/mg)") +
+  xlab("Mother's Genotype") +
+  theme_classic() +
+  theme(text = element_text(size = 25)) +
+  coord_cartesian(ylim = c(-2.5, 1)) +  # Preserve ylim settings
+  theme(axis.line = element_line(size = 1), 
+        axis.ticks = element_line(size = 1),
+        axis.ticks.length = unit(0.3, "cm")) +
+  scale_y_continuous(labels = function(x) sprintf("%.1f", x))
+
+Tyolksmean
+```
+
+```{r}
+yolksmean <- Tyolksmean / Eyolksmean
+
+yolksmean
+
+ggsave(filename = "AAAyolksmean_genotype.png", path = "Pogona Hormones/output", width = 10, height = 15)
+```
